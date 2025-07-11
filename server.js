@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const scrapeYahooFinance = require('./src/scraper');
+const {scrapeYahooFinance, getDividends} = require('./src/scraper');
 
 const app = express();
 const PORT = 5000;
@@ -14,17 +14,34 @@ const corsOptions = {
   app.use(cors(corsOptions));
 
 app.get('/api/stock-data', async (req, res) => {
-  const { stock, period1, period2 } = req.query; // Pass the Yahoo Finance URL as a query parameter
-  console.log(stock);
-  console.log(period1);
+  let { stock, start, end } = req.query;
 
   try {
     if (!stock) {
       return res.status(400).json({ error: 'Missing stock parameter' });
     }
-    const data = await scrapeYahooFinance(stock, period1, period2);
+    if (!end) {
+      end = (new Date()).toISOString().split('T')[0];
+    }
+    const data = await scrapeYahooFinance(stock, start, end);
     res.json(data);
-    res.json({})
+  } catch (error) {
+    res.status(500).json({ error: `Failed to fetch stock data ${error}` });
+  }
+});
+
+app.get('/api/dividend-data', async (req, res) => {
+  let { stock, start, end } = req.query;
+
+  try {
+    if (!stock) {
+      return res.status(400).json({ error: 'Missing stock parameter' });
+    }
+    if (!end) {
+      end = (new Date()).toISOString().split('T')[0];
+    }
+    const data = await getDividends(stock, start, end);
+    res.json(data);
   } catch (error) {
     res.status(500).json({ error: `Failed to fetch stock data ${error}` });
   }

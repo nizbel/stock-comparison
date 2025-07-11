@@ -1,5 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const hgre = require('./data.json');
+const hgreDividends = require('./dividends.json');
 
 /**
  * Scrape historical stock data table from Yahoo Finance.
@@ -16,53 +18,67 @@ axios.interceptors.request.use((config) => {
   return Promise.reject(error);
 });
 
-const scrapeYahooFinance = async (stock, period1, period2) => {
-  const url = `https://finance.yahoo.com/quote/${stock}.SA/history/?period1=${period1}&period2=${period2}`;
-  console.log(url);
-  try {
-    const { data: html } = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': '*/*',
-        'Host': 'finance.yahoo.com',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-      },
-    });
-
-    console.log(html);
-    const $ = cheerio.load(html);
-    const rows = $('table[data-test="historical-prices"] tbody tr');
+const getDividends = async (stock, start, end) => {
+  if (stock === 'HGRE11') {
     const data = [];
 
-    rows.each((index, row) => {
-      const columns = $(row).find('td');
-      if (columns.length > 0) {
-        const date = $(columns[0]).text().trim();
-        const open = $(columns[1]).text().trim();
-        const high = $(columns[2]).text().trim();
-        const low = $(columns[3]).text().trim();
-        const close = $(columns[4]).text().trim();
-        const adjClose = $(columns[5]).text().trim();
-        const volume = $(columns[6]).text().trim();
-
-        data.push({
-          date,
-          open,
-          high,
-          low,
-          close,
-          adjClose,
-          volume,
-        });
+    hgreDividends.forEach(day => {
+      if (day.date_ex >= start && day.date_ex <= end) {
+        const item = {
+          date_ex: new Date(day.date_ex).getTime(), 
+          date_pay: new Date(day.date_pay).getTime(), 
+          value: day.value
+        };
+        data.push(item);
       }
     });
 
+    data.reverse();
     return data;
+  }
+}
+
+const scrapeYahooFinance = async (stock, start, end) => {
+  if (stock === 'HGRE11') {
+    const data = [];
+
+    hgre.forEach(day => {
+      if (day.date >= start && day.date <= end) {
+        const item = [new Date(day.date).getTime(), day.value];
+        data.push(item);
+      }
+    });
+
+    data.reverse();
+    return data;
+  }
+
+  const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${stock}.SA&outputsize=full&apikey=L1P0G55QNUD7E3VM`;
+  console.log(url);
+  try {
+    const { data: json } = await axios.get(url, {
+      headers: {'User-Agent': 'request'}
+    });
+
+    const days_data = json['Time Series (Daily)'];
+    const dates = [];
+    const values = [];
+
+    console.log(days_data);
+    for (let date in days_data) {
+      if (date >= start && date <= end) {
+        let value = Number(days_data[date]['4. close']).toFixed(2);
+        dates.push(date);
+        console.log(dates);
+        values.push(value);
+      }
+    }
+
+    return {dates, values};
   } catch (error) {
     console.error('Error scraping Yahoo Finance data:', error.message);
     throw error;
   }
 };
 
-module.exports = scrapeYahooFinance;
+module.exports = {getDividends, scrapeYahooFinance};
